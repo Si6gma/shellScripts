@@ -1,0 +1,16 @@
+{
+  "requestId": "uuid",
+  "msg": "success",
+  "code": 200,
+  "payload": {
+    "sku": "H6008",
+    "device": "0F:3F:D0:C9:07:30:0D:18",
+    "capabilities": [
+      {
+        "type": "devices.capabilities.dynamic_scene",
+        "instance": "diyScene",
+        "parameters": { "dataType": "ENUM", "options": [] }
+      }
+    ]
+  }
+}
