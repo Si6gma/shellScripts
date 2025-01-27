@@ -1,0 +1,41 @@
+#!/bin/bash
+source keys.sh
+
+# Check if the user provided a brightness value as an argument
+if [ -z "$1" ]; then
+  echo "Usage: $0 <Brightness Level>"
+  echo "Please provide a brightness level (0-100)."
+  exit 1
+fi
+
+# Brightness level from the first argument
+BRIGHTNESS=$1
+
+# Ensure the brightness level is between 0 and 100
+if [ "$BRIGHTNESS" -lt 0 ] || [ "$BRIGHTNESS" -gt 100 ]; then
+  echo "Please provide a valid brightness level between 0 and 100"
+  exit 1
+fi
+
+# Set brightness for all devices and only output "Success" if the request was successful
+for device in "${devices[@]}"
+do
+  response=$(curl -s -X PUT "https://developer-api.govee.com/v1/devices/control" \
+  -H "Govee-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+      "device": "'"$device"'",
+      "model": "H6008",
+      "cmd": {
+          "name": "brightness",
+          "value": '"$BRIGHTNESS"'
+      }
+  }')
+
+  # Check if the response contains "code":200 (success code) and output "Success"
+  if echo "$response" | grep -q '"code":200'; then
+    echo "Success"
+  else
+    echo "$response"
+  fi
+done

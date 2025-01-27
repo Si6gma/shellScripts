@@ -1,0 +1,44 @@
+#!/bin/bash
+
+# Function to get a random color
+get_random_color() {
+    colors=("31" "32" "33" "34" "35" "36" "37")
+  echo "${colors[$RANDOM % ${#colors[@]}]}"
+}
+
+# Function to print lines
+printLines() {
+  while IFS= read -r line; do
+    # Random chance for a burst effect (10% chance)
+    burst=$(( RANDOM % 10 ))
+    if [ $burst -eq 0 ]; then
+      burst_lines_count=$(( RANDOM % 4 + 2 ))  # Burst of 2 to 5 lines
+    else
+      burst_lines_count=1
+    fi
+
+    # Choose a random color for the current burst or line
+    color=$(get_random_color)
+
+    for ((j = 0; j < burst_lines_count; j++)); do
+      if [ -n "$line" ]; then
+        printf "\e[${color}m%s\e[0m\n" "$line"
+        # Read the next line for burst; else exit loop
+        if [ $j -lt $((burst_lines_count - 1)) ]; then
+          IFS= read -r line || break
+        fi
+      fi
+
+      # Quick delay between burst lines or normal delay for single lines
+      if [ $burst -eq 0 ]; then
+        sleep 0.05  # Very quick delay for burst lines
+      else
+        sleep_time=$(awk 'BEGIN{srand(); printf "%.2f\n", 0.2 + rand() * 0.3}')
+        sleep $sleep_time  # Normal delay for single lines
+      fi
+    done
+  done < "$HOME/bin/logfile.txt"
+}
+
+# Start printing lines with effects
+printLines

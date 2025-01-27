@@ -1,1 +1,5 @@
-venv/
+# .gitignore
+
+.DS_Store
+logfile.txt
+keys.sh

@@ -1,0 +1,26 @@
+#!/bin/bash
+
+# Check if two arguments are provided
+if [ "$#" -ne 2 ]; then
+    echo "Usage: mp3 <URL> <Name>"
+    exit 1
+fi
+
+# Assign the arguments to variables
+url="$1"
+output_name="$2"
+
+# Unique temporary audio file name based on output_name
+temp_audio_file="${output_name}_temp_audio.m4a"
+
+# Download the best audio format available
+yt-dlp -f "bestaudio[ext=m4a]/bestaudio" -o "${temp_audio_file}" "$url"
+
+# Convert the downloaded audio to MP3 format
+ffmpeg -i "${temp_audio_file}" -vn -acodec libmp3lame -q:a 2 "${output_name}.mp3"
+
+# Clean up the temporary file
+rm "${temp_audio_file}"
+
+# Notify that the output file has been created
+echo "The audio '${output_name}.mp3' has been successfully created."

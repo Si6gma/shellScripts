@@ -1,0 +1,55 @@
+#!/bin/bash
+
+# Function to show supported file types
+show_file_types() {
+    echo "Supported output file types:"
+    echo "1 | PNG"
+    echo "2 | JPG"
+    echo "3 | JPEG"
+    echo "4 | PDF"
+    echo "5 | Exit"
+}
+
+# Check if the user provided the image path as an argument
+if [ -z "$1" ]; then
+    echo "Usage: pic <image>"
+    exit 1
+fi
+
+image_path="$1"
+
+# Check if the file exists
+if [[ ! -f "$image_path" ]]; then
+    echo "File does not exist. Exiting..."
+    exit 1
+fi
+
+# Step 1: Show file type options
+show_file_types
+echo "Choose the output file type (number):"
+read -r file_type_choice
+
+# Map the user's choice to file extensions
+case "$file_type_choice" in
+    1) output_extension="png" ;;
+    2) output_extension="jpg" ;;
+    3) output_extension="jpeg" ;;
+    4) output_extension="pdf" ;;
+    5) echo "Exiting..."; exit 0 ;;
+    *) echo "Invalid choice. Exiting..."; exit 1 ;;
+esac
+
+# Step 2: Ask the user for the output file name
+echo "Enter the name of the output file (without extension):"
+read -r output_name
+
+# Step 3: Use ImageMagick to convert the image (using 'magick' instead of 'convert')
+output_file="${output_name}.${output_extension}"
+
+magick "$image_path" "$output_file"
+
+if [[ $? -eq 0 ]]; then
+    echo "Image successfully converted to $output_file"
+else
+    echo "An error occurred during conversion."
+fi
