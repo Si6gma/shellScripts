@@ -2,4 +2,4 @@
 
 .DS_Store
 logfile.txt
-keys.sh
+auth.sh

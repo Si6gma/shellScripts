@@ -1,5 +1,5 @@
 #!/bin/bash
-source keys.sh
+source auth.sh
 
 # Converts a scale from 0-100 to Kelvin (2000-9000)
 to_kelvin() {
