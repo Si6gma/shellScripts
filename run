@@ -14,5 +14,5 @@ else
   echo "Compilation failed"
 fi
 
-# Delete the file after complication
+# Delete the file after complication (if you want)
 rm -rf "$output_file"

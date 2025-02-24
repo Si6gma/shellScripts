@@ -1,5 +1,5 @@
 #!/bin/bash
-source keys.sh
+source auth.sh
 
 # Check if the user provided a brightness value as an argument
 if [ -z "$1" ]; then
