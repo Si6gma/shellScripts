@@ -6,13 +6,12 @@ output_file=$(basename "$1" .c)
 # Compile the C program with necessary architecture flags
 gcc -arch arm64 "$1" -o "$output_file"
 
-# Check if compilation succeeded
 if [ $? -eq 0 ]; then
-  # Run the compiled program
-  ./"$output_file"
+  shift
+  ./"$output_file" "$@"
 else
   echo "Compilation failed"
 fi
 
-# Delete the file after complication (if you want)
+# Delete the file to avoid clutter and allow rapid prototyping/testing
 rm -rf "$output_file"
