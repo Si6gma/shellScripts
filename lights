@@ -1,21 +1,24 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Source API key and devices (devices array defined in auth.sh)
 source auth.sh
 
-# Converts a scale from 0-100 to Kelvin (2000-9000)
-to_kelvin() {
-  local scale="$1"
-  local kelvin=$((9000 - scale * 7000 / 100))
-  echo "$kelvin"
+# Hardcoded SKU (do not change per requirements)
+SKU="H6008"
+
+#--- Logging -----------------------------------
+log() {
+  echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*" >&2
 }
 
-# Generic function to handle API responses
+#--- Response Handling -------------------------
 handle_response() {
   local response="$1"
-  local status_code
-  status_code=$(echo "$response" | jq -r '.code' 2>/dev/null)
-
-  if [[ "$status_code" =~ ^[0-9]+$ ]]; then
-    if [ "$status_code" -eq 200 ]; then
+  local code
+  code=$(echo "$response" | jq -r '.code' 2>/dev/null || echo "")
+  if [[ "$code" =~ ^[0-9]+$ ]]; then
+    if (( code == 200 )); then
       echo "Success"
     else
       echo "Error: $response"
@@ -26,236 +29,193 @@ handle_response() {
   fi
 }
 
-# Sends API request for controlling power (on/off)
-control_power() {
-  local device="$1"
-  local value="$2"
-  local payload=$(cat <<EOF
-{
-  "requestId": "uuid",
-  "payload": {
-    "sku": "H6008",
-    "device": "$device",
-    "capability": {
-      "type": "devices.capabilities.on_off",
-      "instance": "powerSwitch",
-      "value": $value
-    }
-  }
-}
-EOF
-)
+#--- HTTP Request with Retries ----------------
+send_request() {
+  local json="$1"
+  local retries=3
   local response
-  response=$(curl -s -X POST "https://openapi.api.govee.com/router/api/v1/device/control" \
-    -H "Content-Type: application/json" \
-    -H "Govee-API-Key: ${API_KEY}" \
-    -d "$payload")
 
-  handle_response "$response"
-}
-
-# Sends API request to control temperature (scale 0-100)
-control_temp() {
-  local device="$1"
-  local scale="$2"
-  local kelvin
-  kelvin=$(to_kelvin "$scale")
-
-  local payload=$(cat <<EOF
-{
-  "requestId": "uuid",
-  "payload": {
-    "sku": "H6008",
-    "device": "$device",
-    "capability": {
-      "type": "devices.capabilities.color_setting",
-      "instance": "colorTemperatureK",
-      "value": $kelvin
-    }
-  }
-}
-EOF
-)
-
-  local response
-  response=$(curl -s -X POST "https://openapi.api.govee.com/router/api/v1/device/control" \
-    -H "Content-Type: application/json" \
-    -H "Govee-API-Key: ${API_KEY}" \
-    -d "$payload")
-
-  handle_response "$response"
-}
-
-# Sends API request to control brightness (0-100)
-control_brightness() {
-  local device="$1"
-  local value="$2"
-
-  local payload=$(cat <<EOF
-{
-  "requestId": "uuid",
-  "payload": {
-    "sku": "H6008",
-    "device": "$device",
-    "capability": {
-      "type": "devices.capabilities.range",
-      "instance": "brightness",
-      "value": $value
-    }
-  }
-}
-EOF
-)
-
-  local response
-  response=$(curl -s -X POST "https://openapi.api.govee.com/router/api/v1/device/control" \
-    -H "Content-Type: application/json" \
-    -H "Govee-API-Key: ${API_KEY}" \
-    -d "$payload")
-
-  handle_response "$response"
-}
-
-# Converts RGB values to an integer
-convert_rgb() {
-  local r="$1"
-  local g="$2"
-  local b="$3"
-
-  # Validate RGB values are within 0-255 range
-  for color in "$r" "$g" "$b"; do
-    if [[ ! "$color" =~ ^[0-9]+$ ]] || [ "$color" -lt 0 ] || [ "$color" -gt 255 ]; then
-      echo "Error: Invalid RGB value ($color). Must be between 0 and 255."
-      return 1
+  until (( retries == 0 )); do
+    if response=$(curl -sS -X POST "https://openapi.api.govee.com/router/api/v1/device/control" \
+      -H "Content-Type: application/json" \
+      -H "Govee-API-Key: ${API_KEY}" \
+      -d "$json"); then
+      handle_response "$response" && return 0
+    else
+      log "Request failed, retrying... ($(( --retries )) retries left)"
+      sleep 1
     fi
   done
 
-  local rgb_value=$((r * 65536 + g * 256 + b))
-  echo "$rgb_value"
+  echo "Error: All retries failed"
+  return 1
 }
 
-# Sends API request to control RGB colors
-control_rgb() {
-  local device="$1"
-  local r="$2"
-  local g="$3"
-  local b="$4"
-  local rgb_integer
-
-  rgb_integer=$(convert_rgb "$r" "$g" "$b") || return 1
-
-  local payload=$(cat <<EOF
-{
-  "requestId": "uuid",
-  "payload": {
-    "sku": "H6008",
-    "device": "$device",
-    "capability": {
-      "type": "devices.capabilities.color_setting",
-      "instance": "colorRgb",
-      "value": $rgb_integer
-    }
-  }
-}
-EOF
-)
-
-  local response
-  response=$(curl -s -X POST "https://openapi.api.govee.com/router/api/v1/device/control" \
-    -H "Content-Type: application/json" \
-    -H "Govee-API-Key: ${API_KEY}" \
-    -d "$payload")
-
-  handle_response "$response"
+#--- Utility Functions -------------------------
+to_kelvin() {
+  local scale=$1
+  echo $((9000 - scale * 7000 / 100))
 }
 
-# Displays help/usage information
+validate_range() {
+  local name=$1 value=$2 min=$3 max=$4
+  if ! [[ $value =~ ^[0-9]+$ ]] || (( value < min || value > max )); then
+    echo "❌ $name must be between $min and $max" >&2
+    exit 1
+  fi
+}
+
+convert_rgb() {
+  local r=$1 g=$2 b=$3
+  for c in "$r" "$g" "$b"; do
+    if ! [[ $c =~ ^[0-9]+$ ]] || (( c < 0 || c > 255 )); then
+      echo "Error: RGB values must be 0-255." >&2
+      return 1
+    fi
+  done
+  echo $(( r * 65536 + g * 256 + b ))
+}
+
+#--- Control Functions -------------------------
+control_power() {
+  local device=$1 value=$2
+  send_request "$(jq -n \
+    --arg id "$device" \
+    --arg sku "$SKU" \
+    --argjson v $value \
+    '{requestId: "uuid", payload: {sku: $sku, device: $id, capability: {type: "devices.capabilities.on_off", instance: "powerSwitch", value: $v}}}')"
+}
+
+control_brightness() {
+  local device=$1 value=$2
+  send_request "$(jq -n \
+    --arg id "$device" \
+    --arg sku "$SKU" \
+    --argjson v $value \
+    '{requestId: "uuid", payload: {sku: $sku, device: $id, capability: {type: "devices.capabilities.range", instance: "brightness", value: $v}}}')"
+}
+
+control_color() {
+  local device=$1 instance=$2 value=$3
+  send_request "$(jq -n \
+    --arg id "$device" \
+    --arg sku "$SKU" \
+    --arg inst "$instance" \
+    --argjson v $value \
+    '{requestId: "uuid", payload: {sku: $sku, device: $id, capability: {type: "devices.capabilities.color_setting", instance: $inst, value: $v}}}')"
+}
+
+#--- Presets -----------------------------------
+apply_preset() {
+  local preset=$1
+
+  case "$preset" in
+    sunset)
+    # https://www.color-hex.com/color-palette/87115
+      control_brightness "${devices[0]}" 20
+      control_color "${devices[0]}" colorRgb "$(convert_rgb 0 81 255)"
+
+      control_brightness "${devices[1]}" 20
+      control_color "${devices[1]}" colorRgb "$(convert_rgb 233 50 73)"
+
+      control_brightness "${devices[2]}" 20
+      control_color "${devices[2]}" colorRgb "$(convert_rgb 191 64 191)"
+      ;;
+    ocean)
+      # Example for 3 lights: light blue, deep blue, dark blue
+      control_brightness "${devices[0]}" 80
+      control_color "${devices[0]}" colorRgb "$(convert_rgb 0 191 255)"
+
+      control_brightness "${devices[1]}" 80
+      control_color "${devices[1]}" colorRgb "$(convert_rgb 0 0 255)"
+
+      control_brightness "${devices[2]}" 80
+      control_color "${devices[2]}" colorRgb "$(convert_rgb 25 25 112)"
+      ;;
+    brightwhite)
+      # Set all lights to pure white
+      for dev in "${devices[@]}"; do
+        control_brightness "$dev" 100
+        control_color "$dev" colorTemperatureK "$(to_kelvin 100)"
+      done
+      ;;
+    *)
+      echo "Error: Unknown preset '$preset'" >&2
+      exit 1
+      ;;
+  esac
+}
+
+#--- Help/Usage -------------------------------
 display_help() {
-  cat << EOF
+  cat <<EOF
+
+Usage: $(basename "$0") [options]
 
 Options:
-  -d <Number>    Select device (1, 2, or 3)
-  -x <Value>     Set brightness (0-100)
-  -w <Value>     Set warm color temperature (1-100)
-  -r <Value>     Set red value (0-255)
-  -g <Value>     Set green value (0-255)
-  -b <Value>     Set blue value (0-255)
-  -o             Turn the device(s) on
-  -f             Turn the device(s) off
+  -d <1|2|3>        Select device index
+  -x <0-100>        Set brightness
+  -w <0-100>        Set color temperature
+  -r <0-255>        Red component
+  -g <0-255>        Green component
+  -b <0-255>        Blue component
+  -o                Turn on
+  -f                Turn off
+  -p <preset>       Apply a preset (e.g., sunset, ocean, brightwhite)
+  -h                Display this help
 
-Examples:
-  lights -o                  Turn on all devices (default)
-  lights -d 1 -b 50          Set brightness to 50% on device 1
-  lights -w 50               Set all devices to 50% warm color
-  lights -d 2 -r 255 -g 0 -b 0  Set device 2 color to red
-  lights -d 3 -f             Turn off device 3
-
+Example:
+  $(basename "$0") -d 2 -r 255 -g 0 -b 0
+  $(basename "$0") -p sunset
 EOF
 }
 
-# Handle command-line arguments
-if [ $# -eq 0 ]; then
+#--- Main --------------------------------------
+if (( $# == 0 )); then
   display_help
   exit 0
 fi
 
-# Variables for storing RGB and brightness/color values
-r_value=""
-g_value=""
-b_value=""
-brightness_value=""
-color_scale=""
-power=""
-
-# Variable to track if a device was explicitly selected
+# Initialize inputs
+r="" g="" b="" bright="" temp="" power="" preset=""
 device_selected=false
 
-# Parse arguments
-while getopts "x:w:d:r:g:b:of" opt; do
+while getopts ":d:x:w:r:g:b:ofhp:" opt; do
   case $opt in
-    x) brightness_value=$OPTARG ;;  # Brightness
-    w) color_scale=$OPTARG ;;  # Color temperature
-    d) selected_devices=("${devices[$((OPTARG - 1))]}"); device_selected=true ;;  # Select device
-    r) r_value=$OPTARG ;;  # Red value
-    g) g_value=$OPTARG ;;  # Green value
-    b) b_value=$OPTARG ;;  # Blue value
-    o) power=1 ;;  # Turn on
-    f) power=0 ;;  # Turn off
-    *) display_help; exit 1 ;;
+    d) idx=$OPTARG; device_selected=true ;;
+    x) validate_range "Brightness" "$OPTARG" 0 100; bright=$OPTARG ;;
+    w) validate_range "TempScale" "$OPTARG" 0 100; temp=$OPTARG ;;
+    r) r=$OPTARG ;;
+    g) g=$OPTARG ;;
+    b) b=$OPTARG ;;
+    o) power=1 ;;  f) power=0 ;;
+    p) preset=$OPTARG ;;
+    h|*) display_help; exit 0 ;;
   esac
 done
 
-# If no specific device is selected, apply to all devices
-if [ "$device_selected" = false ]; then
-  selected_devices=("${devices[@]}")
+if [[ -n $preset ]]; then
+  apply_preset "$preset"
+  exit 0
 fi
 
-# Apply power setting if specified
-if [ -n "$power" ]; then
-  for device in "${selected_devices[@]}"; do
-    control_power "$device" "$power"
-  done
+if ! $device_selected; then
+  targets=("${devices[@]}")
+else
+  targets=("${devices[$((idx-1))]}")
 fi
 
-# Apply color temperature if specified
-if [ -n "$color_scale" ]; then
-  for device in "${selected_devices[@]}"; do
-    control_temp "$device" "$color_scale"
-  done
-fi
+for dev in "${targets[@]}"; do
+  [[ -n $power ]]   && control_power      "$dev" "$power"
+  [[ -n $bright ]]  && control_brightness "$dev" "$bright"
+  [[ -n $temp ]]    && control_color      "$dev" colorTemperatureK "$(to_kelvin "$temp")"
 
-# Apply brightness if specified
-if [ -n "$brightness_value" ]; then
-  for device in "${selected_devices[@]}"; do
-    control_brightness "$device" "$brightness_value"
-  done
-fi
-
-# Apply RGB if all values are provided
-if [ -n "$r_value" ] && [ -n "$g_value" ] && [ -n "$b_value" ]; then
-  for device in "${selected_devices[@]}"; do
-    control_rgb "$device" "$r_value" "$g_value" "$b_value"
-  done
-elif [ -n "$r_value" ] || [ -n "$g_value" ] || [ -n "$b_value" ]; then
-  echo "Error: You must provide values for all RGB components (-r, -g, -b)."
-fi
+  if [[ -n $r || -n $g || -n $b ]]; then
+    if [[ -z $r || -z $g || -z $b ]]; then
+      echo "Error: all RGB components (-r, -g, -b) are required." >&2
+      exit 1
+    fi
+    rgb_int=$(convert_rgb "$r" "$g" "$b")
+    control_color "$dev" colorRgb "$rgb_int"
+  fi
+done
