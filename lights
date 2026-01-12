@@ -132,6 +132,17 @@ apply_preset() {
       control_brightness "${devices[2]}" 80
       control_color "${devices[2]}" colorRgb "$(convert_rgb 25 25 112)"
       ;;
+    test)
+      # Example for 3 lights: light blue, deep blue, dark blue
+      control_brightness "${devices[0]}" 80
+      control_color "${devices[0]}" colorRgb "$(convert_rgb 75 0 130)"
+
+      control_brightness "${devices[1]}" 80
+      control_color "${devices[1]}" colorRgb "$(convert_rgb 255 111 97)"
+
+      control_brightness "${devices[2]}" 80
+      control_color "${devices[2]}" colorRgb "$(convert_rgb 59 130 246)"
+      ;;
     brightwhite)
       # Set all lights to pure white
       for dev in "${devices[@]}"; do

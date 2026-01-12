@@ -1,0 +1,17 @@
+#!/bin/bash
+
+shopt -s nullglob
+
+input_dir="$1"
+if [ -z "$input_dir" ]; then
+  echo "Usage: $0 <folder>"
+  exit 1
+fi
+
+find "$input_dir" -type f -iname "*.heic" | while read -r file; do
+  jpg="${file%.*}.jpg"
+  echo "Converting: $file → $jpg"
+  magick "$file" "$jpg"
+done
+
+echo "✅ All HEIC images converted to JPEG!"

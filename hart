@@ -1,0 +1,68 @@
+#!/bin/bash
+
+FIREBASE_URL="https://hart-telemetry-default-rtdb.europe-west1.firebasedatabase.app"
+
+echo "🔐 Getting Firebase token..."
+ID_TOKEN=$(node generate-id-token.js)
+
+if [ -z "$ID_TOKEN" ]; then
+  echo "❌ Failed to get token"
+  exit 1
+fi
+
+echo "✅ Got token"
+echo "🪪 ID Token (start): ${ID_TOKEN:0:30}..."
+
+echo "🧪 Writing debug UID to Firebase..."
+curl -s -X PUT -H "Content-Type: application/json" \
+  -d "{\"note\": \"debug test\", \"ts\": \"$(date)\", \"token_preview\": \"${ID_TOKEN:0:30}...\"}" \
+  "$FIREBASE_URL/debug/tokenUsed.json?auth=$ID_TOKEN" > /dev/null
+
+echo "📎 Check: https://hart-telemetry-default-rtdb.europe-west1.firebasedatabase.app/debug/tokenUsed.json"
+
+echo "🧭 Start telemetry loop..."
+sleep 1
+
+while true; do
+  TIMESTAMP=$(date +"%H-%M-%S")
+  DATE=$(date +"%Y-%m-%d")
+
+  RPM=$((RANDOM % 5000 + 1000))                          
+  OIL_PRESSURE=$(awk "BEGIN { printf \"%.2f\", 20 + (80 - 20) * rand() }")
+  OIL_TEMP=$((RANDOM % 80 + 70))                         
+  COOLANT_TEMP=$((RANDOM % 40 + 70))                     
+  LAMBDA=$(awk "BEGIN { printf \"%.3f\", 0.7 + (1.3 - 0.7) * rand() }")    
+  THROTTLE_POSITION=$((RANDOM % 101))                   
+  FUEL_LEVEL=$((RANDOM % 101))                          
+  VOLTAGE=$(awk "BEGIN { printf \"%.2f\", 11 + (14.8 - 11) * rand() }")     
+
+  JSON=$(cat <<EOF
+{
+  "rpm": $RPM,
+  "oil_pressure": $OIL_PRESSURE,
+  "oil_temp": $OIL_TEMP,
+  "coolant_temp": $COOLANT_TEMP,
+  "lambda": $LAMBDA,
+  "throttle_position": $THROTTLE_POSITION,
+  "fuel_level": $FUEL_LEVEL,
+  "voltage": $VOLTAGE
+}
+EOF
+)
+
+  RESPONSE=$(curl -s -X PUT -H "Content-Type: application/json" \
+    -d "$JSON" \
+    "$FIREBASE_URL/telemetry/$DATE/$TIMESTAMP.json?auth=$ID_TOKEN")
+
+  if [[ "$RESPONSE" == *"Permission denied"* ]]; then
+    echo "⛔ Firebase said: Permission denied"
+    echo "👉 Check your rules and make sure UID is correct in generate-id-token.js"
+    echo "📎 Current rules expect auth.uid === 'device-001'"
+    echo "🔎 Decode token at https://jwt.io if needed"
+    exit 1
+  fi
+
+  echo "[$TIMESTAMP] Sent → RPM=$RPM | OilP=$OIL_PRESSURE | OilT=$OIL_TEMP | Coolant=$COOLANT_TEMP | Lambda=$LAMBDA | Throttle=$THROTTLE_POSITION | Fuel=$FUEL_LEVEL | Voltage=$VOLTAGE"
+
+  sleep 2
+done
