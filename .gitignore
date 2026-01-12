@@ -3,3 +3,8 @@
 .DS_Store
 logfile.txt
 auth.sh
+generate-id-token.js
+package.json
+package-lock.json
+node_modules/
+firebase-service-account.json

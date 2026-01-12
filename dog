@@ -1,0 +1,4 @@
+while true; do
+  curl -s 'http://192.168.4.1/action?action_id=13' >/dev/null
+  sleep 15
+done

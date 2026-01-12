@@ -1,34 +1,18 @@
 #!/bin/bash
+set -e
 
-# Check if the correct number of arguments are provided
 if [ "$#" -ne 2 ]; then
-    echo "Usage: yt <url> <name>"
+    echo "Usage: yt <url> <output_name>"
     exit 1
 fi
 
-# Assign input arguments to variables
 url="$1"
 output_name="$2"
 
-# Define temporary filenames for the video, audio, and merged output
-temp_video_file="${output_name}_temp_video.mp4"
-temp_audio_file="${output_name}_temp_audio.m4a"
-merged_file="${output_name}_merged_temp.mp4"
-
-# Download the best video stream in MP4 format
-yt-dlp -f "bestvideo[ext=mp4]" -o "${temp_video_file}" "$url"
-
-# Download the best audio stream in M4A format
-yt-dlp -f "bestaudio[ext=m4a]" -o "${temp_audio_file}" "$url"
-
-# Merge video and audio into one file
-ffmpeg -i "${temp_video_file}" -i "${temp_audio_file}" -c:v copy -c:a aac "${merged_file}"
-
-# Convert the merged file to a standard MP4 format with H.264 video and AAC audio
-ffmpeg -i "${merged_file}" -vcodec libx264 -acodec aac -strict -2 -y "${output_name}.mp4"
-
-# Clean up temporary files
-rm "${temp_video_file}" "${temp_audio_file}" "${merged_file}"
-
-# Notify the user of the successful output
-echo "The video '${output_name}.mp4' has been successfully created."
+yt-dlp \
+  -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]" \
+  --merge-output-format mp4 \
+  --add-header "User-Agent: Mozilla/5.0" \
+  --add-header "Referer: $url" \
+  -o "${output_name}.mp4" \
+  "$url"
