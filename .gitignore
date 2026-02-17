@@ -1,10 +1,44 @@
-# .gitignore
-
+# macOS
 .DS_Store
+.AppleDouble
+.LSOverride
+
+# Logs
+*.log
 logfile.txt
+
+# Authentication files (DO NOT COMMIT)
 auth.sh
+*-auth.sh
+.env
+.env.local
+.env.*.local
+
+# Firebase/Google Cloud
+firebase-service-account.json
 generate-id-token.js
+*-service-account.json
+
+# Node.js
 package.json
 package-lock.json
 node_modules/
-firebase-service-account.json
+npm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Compiled binaries
+*.o
+*.out
+*.exe
+a.out
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
